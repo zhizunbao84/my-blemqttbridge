@@ -1,0 +1,2 @@
+rootProject.name = "my-bleanalyzer"
+include ':app'

@@ -47,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        ble = new BleWrapper(adapter, this::appendLog);
+        ble = new BleWrapper(adapter, this, this::appendLog);
 
         btnConnect.setOnClickListener(v -> {
             String mac = etMac.getText().toString().trim();

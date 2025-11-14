@@ -1,4 +1,4 @@
-package com.example.mitemp2reader;
+package com.example.bleanalyzer3;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.le.*;

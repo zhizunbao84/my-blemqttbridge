@@ -154,6 +154,8 @@ public class MainActivity extends AppCompatActivity {
     }
     /* =================================================== */
 
+    /* ============ 1. 配置你的 Token（32 位小写） ============ */
+    private static final String TOKEN_HEX = "5d0836c47ebe0c99bbd7474737bbadfd";
     /* ===================== 解析 ===================== */
     private void parseXiaomiTempHumi(ScanResult result) {
         /* 1. 只打印指定 MAC 的广播包 */
@@ -178,16 +180,17 @@ public class MainActivity extends AppCompatActivity {
             int type = raw[idx] & 0xFF;
             if (type == 0x16 && len >= 13) {
                 int uuid = (raw[idx + 1] & 0xFF) | ((raw[idx + 2] & 0xFF) << 8);
-                if (uuid == 0xFE95 && (raw[idx + 3] & 0xFF) == 0x70) {
-                    if ((raw[idx + 4] & 0xFF) == 0x20) {
-                        int tempRaw = (raw[idx + 5] & 0xFF)
-                                | ((raw[idx + 6] & 0xFF) << 8);
+                if (uuid == 0xFE95) {
+                    int frameType = raw[idx + 3] & 0xFF;
+                    if (frameType == 0x5B) {
+                        decrypt0x5B(mac, raw, idx + 4, len - 4);
+                        return;
+                    }
+                    if (frameType == 0x20) {   // 明文备份
+                        int tempRaw = (raw[idx + 5] & 0xFF) | ((raw[idx + 6] & 0xFF) << 8);
                         int humRaw  = raw[idx + 7] & 0xFF;
-                        float temp = tempRaw * 0.1f;
-                        int hum = humRaw;
-
-                        log(String.format(java.util.Locale.CHINA,
-                                "%s  →  %.1f ℃   %d %%", mac, temp, hum));
+                        log("★ 明文解析  温度=" + (tempRaw * 0.1f) +
+                            "℃  湿度=" + humRaw + "%");
                         return;
                     }
                 }
@@ -196,7 +199,61 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     /* =================================================== */
+    /* ============ 3. 0x5B 解密实现 ============ */
+    private void decrypt0x5B(String mac, byte[] raw, int offset, int dataLen) {
+        try {
+            /* --- 1. 提取字段 --- */
+            int payloadOff = offset;
+            byte[] enc  = new byte[8];   // 8 字节 密文(含 4 字节 tag)
+            System.arraycopy(raw, payloadOff, enc, 0, 8);
+            byte[] nonce = new byte[8];
+            System.arraycopy(enc, 0, nonce, 0, 5);        // enc[0:5]
+            byte[] macBytes = macToBytes(mac);
+            System.arraycopy(macBytes, 3, nonce, 5, 3);   // MAC 后 3 字节
+    
+            byte[] key = hexToBytes(TOKEN_HEX);
+            byte[] cipherText = new byte[5];              // 前 5 字节是密文+tag
+            System.arraycopy(enc, 0, cipherText, 0, 5);
+    
+            /* --- 2. AES-128-CCM 解密 --- */
+            Cipher cipher = Cipher.getInstance("AES/CCM/NoPadding");
+            SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
+            cipher.init(Cipher.DECRYPT_MODE, keySpec,
+                        new IvParameterSpec(nonce));
+            byte[] plain = cipher.doFinal(cipherText);    // 5 字节
+    
+            /* --- 3. 提取数值 --- */
+            int humidity = plain[0] & 0xFF;
+            int tempRaw  = (plain[1] & 0xFF) | ((plain[2] & 0xFF) << 8);
+            float temp   = tempRaw * 0.1f;
+            int battery  = (plain[3] & 0xFF) | ((plain[4] & 0xFF) << 8);
+    
+            log("★ 解密成功  温度=" + temp + "℃  湿度=" + humidity +
+                "%  电池=" + battery + " mV");
+    
+        } catch (Exception e) {
+            log("解密失败: " + e.getMessage());
+        }
+    }
+    
+    /* ============ 4. 工具 ============ */
+    private byte[] macToBytes(String mac) {
+        String[] hex = mac.split(":");
+        byte[] b = new byte[6];
+        for (int i = 0; i < 6; i++) b[i] = (byte) Integer.parseInt(hex[i], 16);
+        return b;
+    }
+    
+    private byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] out = new byte[len >> 1];
+        for (int i = 0; i < len; i += 2) {
+            out[i >> 1] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return out;
+    }
 
+    
     /* ===================== 界面 ===================== */
     @Override
     protected void onCreate(Bundle savedInstanceState) {

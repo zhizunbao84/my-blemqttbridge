@@ -7,7 +7,7 @@ android {
     compileSdk 33                         // 用你已装的 SDK 版本即可
 
     defaultConfig {
-        applicationId "com.example.bleanalyzer"
+        applicationId "com.example.bleanalyzer3"
         minSdk 23                         // Android 6.0
         targetSdk 33
         versionCode 1

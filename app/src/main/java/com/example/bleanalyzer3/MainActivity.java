@@ -224,7 +224,7 @@ public class MainActivity extends AppCompatActivity {
                     new org.bouncycastle.crypto.modes.CCMBlockCipher(
                             new org.bouncycastle.crypto.engines.AESEngine());
             ccm.init(false,
-                    new org.bouncycastle.crypto.params.CCMParameters(keyParam, 32, nonce)); // 32 bit = 4 byte tag
+                    new CCMParameters(keyParam, 32, nonce, new byte[0])); // 32 bit = 4 byte tag
     
             byte[] cipherText = new byte[5];   // 前 5 字节 密文+tag
             System.arraycopy(enc, 0, cipherText, 0, 5);

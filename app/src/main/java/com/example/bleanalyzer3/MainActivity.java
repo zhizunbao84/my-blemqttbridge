@@ -230,8 +230,7 @@ public class MainActivity extends AppCompatActivity {
             ccm.init(false,
                     new CCMParameters(keyParam, 32, nonce, new byte[0])); // 32 bit = 4 byte tag
     
-            byte[] cipherText = new byte[5];   // 前 5 字节 密文+tag
-            System.arraycopy(enc, 0, cipherText, 0, 5);
+            byte[] cipherText = Arrays.copyOfRange(enc, 0, 5);
             byte[] plain = new byte[5];
             int len = ccm.processBytes(cipherText, 0, 5, plain, 0);
             ccm.doFinal(plain, len);

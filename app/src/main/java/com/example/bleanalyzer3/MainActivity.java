@@ -187,6 +187,10 @@ public class MainActivity extends AppCompatActivity {
             if (type == 0x16 && len >= 13) {
                 int uuid = (raw[idx + 1] & 0xFF) | ((raw[idx + 2] & 0xFF) << 8);
                 int uuidHi = (raw[idx + 3] & 0xFF) | ((raw[idx + 4] & 0xFF) << 8);
+                int frameType = raw[idx + 5] & 0xFF;
+                log(">>> frameType = 0x" + Integer.toHexString(frameType));
+                log(">>> uuid = 0x" + Integer.toHexString(uuid));
+                log(">>> uuidHi = 0x" + Integer.toHexString(uuidHi));
                 if (uuid == 0xFC40 && uuidHi == 0x00D2) {   // 0x00D2FC40
                     int tempRaw = (raw[idx + 7] & 0xFF) | ((raw[idx + 8] & 0xFF) << 8);
                     int humRaw  = raw[idx + 9] & 0xFF;
@@ -195,8 +199,6 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 if (uuid == 0xFE95) {
-                    int frameType = raw[idx + 5] & 0xFF;
-                    log(">>> frameType = 0x" + Integer.toHexString(frameType));
  
                     if (frameType == 0x5B) {
                         log(">>> 发现 0x5B 加密包，尝试解密…");

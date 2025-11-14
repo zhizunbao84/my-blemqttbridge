@@ -188,7 +188,10 @@ public class MainActivity extends AppCompatActivity {
                 int uuid = (raw[idx + 1] & 0xFF) | ((raw[idx + 2] & 0xFF) << 8);
                 if (uuid == 0xFE95) {
                     int frameType = raw[idx + 3] & 0xFF;
+                    log(">>> frameType = 0x" + Integer.toHexString(frameType));
+ 
                     if (frameType == 0x5B) {
+                        log(">>> 发现 0x5B 加密包，尝试解密…");
                         decrypt0x5B(mac, raw, idx + 4, len - 4);
                         return;
                     }
@@ -241,7 +244,8 @@ public class MainActivity extends AppCompatActivity {
                 "%  电池=" + battery + " mV");
     
         } catch (Exception e) {
-            log("解密失败: " + e.getMessage());
+            log("解密异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            e.printStackTrace();   // 调试用，可在 logcat 看完整栈
         }
     }
     

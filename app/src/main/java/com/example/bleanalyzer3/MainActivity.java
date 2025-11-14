@@ -185,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
                         int humRaw  = raw[idx + 7] & 0xFF;
                         float temp = tempRaw * 0.1f;
                         int hum = humRaw;
-                        String mac = result.getDevice().getAddress();
+
                         log(String.format(java.util.Locale.CHINA,
                                 "%s  →  %.1f ℃   %d %%", mac, temp, hum));
                         return;

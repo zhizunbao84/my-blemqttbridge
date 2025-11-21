@@ -58,14 +58,23 @@ public class BLEService extends Service {
         configManager = ConfigManager.getInstance(this);
         mqttManager = MQTTManager.getInstance(this);
         
+        /* 1. 启动 BLE 扫描（无论 MQTT 是否连上） */
         initializeBluetooth();
         loadTargetDevices();
-        
-        // 连接MQTT
-        mqttManager.connect();
-        
-        // 开始扫描循环
-        startScanning();
+        startScanning();          // ← 先扫，MQTT后启
+    
+        /* 2. MQTT 异步连接（失败不影响 BLE） */
+        new Thread(() -> {
+            int retry = 0;
+            while (!mqttManager.isConnected() && retry < 10) {
+                Logger.i("MQTT connect attempt " + (retry + 1));
+                mqttManager.connect();
+                if (!mqttManager.isConnected()) {
+                    try { Thread.sleep(5000); } catch (InterruptedException ignored) {}
+                    retry++;
+                }
+            }
+        }).start();
     }
     
     private void initializeBluetooth() {

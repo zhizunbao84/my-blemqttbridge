@@ -1,4 +1,4 @@
 
 
-rootProject.name = "my-bleanalyzer3"
+rootProject.name = "my-blemqttbridge"
 include ':app'

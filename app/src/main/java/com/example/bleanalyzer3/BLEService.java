@@ -15,6 +15,7 @@ import androidx.annotation.Nullable;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
 
 public class BLEService extends Service {
     private BluetoothAdapter bluetoothAdapter;

@@ -37,22 +37,25 @@ public class ConfigManager {
             File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
             File externalConfig = new File(externalDir, CONFIG_FILE);
             
-            if (externalConfig.exists()) {
-                Logger.i("Loading config from external storage: " + externalConfig.getAbsolutePath());
-                loadFromFile(externalConfig);
-            } else {
-                // 如果不存在，则从assets复制到外部存储
+            /* 1. 目录/文件不存在：首次安装，从 assets 拷贝 */
+            if (!externalConfig.exists()) {
                 Logger.i("External config not found, copying from assets");
                 copyConfigFromAssets();
-                if (externalConfig.exists()) {
-                    loadFromFile(externalConfig);
-                }
+            }
+
+            /* 2. 重新解析（用户可能已手动修改） */
+            if (externalConfig.exists()) {
+                parseIni(externalConfig);
+                Logger.i("Config reloaded from " + externalConfig.getAbsolutePath());
             }
             
             Logger.i("Config loaded successfully");
             Logger.d("Device MACs: " + getDeviceMacs());
             Logger.d("Scan interval: " + getScanInterval());
             Logger.d("MQTT Broker: " + getMQTTBroker());
+            /* 3. 设置日志级别 */
+            String level = config.containsKey("general.log_level") ? config.get("general.log_level") : "DEBUG";
+            Logger.setLogLevel(level);
         } catch (Exception e) {
             Logger.e("Error loading config", e);
         }

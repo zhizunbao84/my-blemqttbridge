@@ -1,387 +1,165 @@
 package com.example.bleanalyzer3;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.le.*;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.location.LocationManager;
 import android.net.Uri;
-import android.os.*;
+import android.os.Build;
+import android.os.Bundle;
 import android.provider.Settings;
-import android.text.method.ScrollingMovementMethod;
-import android.widget.*;
-import androidx.annotation.NonNull;
+import android.widget.TextView;
+import android.widget.Button;
+import android.widget.ScrollView;
+import android.widget.LinearLayout;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-
-import java.util.*;
-
-import org.bouncycastle.crypto.modes.CCMBlockCipher;
-import org.bouncycastle.crypto.engines.AESEngine;
-import org.bouncycastle.crypto.params.KeyParameter;
-import org.bouncycastle.crypto.params.CCMParameters;
-
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 public class MainActivity extends AppCompatActivity {
-
-    private static final int REQ_PERMISSION = 1;
-    private static final int MAX_RETRY     = 2;          // 最多连续申请次数
-    private int retryCount = 0;
-
-    private TextView tvLog;
-    private ScrollView scroll;
-    private StringBuilder sb = new StringBuilder();
-    private BluetoothLeScanner scanner;
-    private ScanCallback scanCallback;
-
-    /* ===================== 日志 ===================== */
-    private void log(final String txt) {
-        runOnUiThread(() -> {
-            sb.append(txt).append("\n");
-            tvLog.setText(sb);
-            scroll.fullScroll(ScrollView.FOCUS_DOWN);
-        });
-    }
-    private void toast(String s) {
-        Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
-    }
-
-    /* ===================== 权限：只认“是否授予” ===================== */
-    private boolean hasScanPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            return checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN)
-                    == PackageManager.PERMISSION_GRANTED;
-        } else {
-            return checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    == PackageManager.PERMISSION_GRANTED;
-        }
-    }
-
-    /* 真正缺少的权限列表 */
-    private List<String> missingPerms() {
-        List<String> list = new ArrayList<>();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN)
-                    != PackageManager.PERMISSION_GRANTED)
-                list.add(android.Manifest.permission.BLUETOOTH_SCAN);
-            if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED)
-                list.add(android.Manifest.permission.BLUETOOTH_CONNECT);
-        } else {
-            if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    != PackageManager.PERMISSION_GRANTED)
-                list.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
-        }
-        return list;
-    }
-
-    /* 申请权限入口 */
-    private void requestPerms() {
-        List<String> need = missingPerms();
-        if (need.isEmpty()) {
-            startScan();
-            return;
-        }
-        /* 连续申请记录 */
-        retryCount++;
-        ActivityCompat.requestPermissions(this,
-                need.toArray(new String[0]), REQ_PERMISSION);
-    }
-
-    /* 结果回调：简单暴力，只要没全给就再申，超次进设置 */
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_PERMISSION) {
-            /* 只要有一个拒绝就算失败 */
-            boolean allGranted = true;
-            for (int g : grantResults) {
-                if (g != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false;
-                    break;
-                }
-            }
-            if (allGranted) {
-                retryCount = 0;
-                startScan();
-                return;
-            }
-            /* 未全授予 */
-            if (retryCount < MAX_RETRY) {
-                toast("需要权限才能扫描蓝牙");
-                requestPerms();          // 再试一次
-            } else {
-                /* 两次都拒绝，带用户进设置页 */
-                Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + getPackageName()));
-                startActivity(i);
-                toast("请手动授予权限");
-                finish();
-            }
-        }
-    }
-    /* =================================================== */
-
-    /* ===================== 扫描 ===================== */
-    private void startScan() {
-        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        if (adapter == null || !adapter.isEnabled()) {
-            toast("请先打开蓝牙");
-            finish();
-            return;
-        }
-        scanner = adapter.getBluetoothLeScanner();
-        if (scanner == null) {
-            toast("BluetoothLeScanner 为空");
-            finish();
-            return;
-        }
-        scanCallback = new ScanCallback() {
-            @Override
-            public void onScanResult(int callbackType, ScanResult result) {
-
-                /* 先无脑打印所有广播包长度，确认回调 alive */
-                log("收到广播，长度=" + result.getScanRecord().getBytes().length + "  MAC=" + result.getDevice().getAddress());
-                parseXiaomiTempHumi(result);
-            }
-        };
-        ScanSettings settings = new ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build();
-        log("开始扫描 …");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // 再次保护，防止 ROM 异常
-            if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_SCAN)
-                    != PackageManager.PERMISSION_GRANTED) return;
-        }
-        scanner.startScan(null, settings, scanCallback);
-    }
-    /* =================================================== */
-
-    /* ============ 1. 配置你的 Token（32 位小写） ============ */
-    private static final String TOKEN_HEX = "5d0836c47ebe0c99bbd7474737bbadfd";
-    /* ===================== 解析 ===================== */
-    private void parseXiaomiTempHumi(ScanResult result) {
-        /* 1. 只打印指定 MAC 的广播包 */
-        String mac = result.getDevice().getAddress();
-        if (!"A4:C1:38:25:F4:AE".equalsIgnoreCase(mac)) return;
-        byte[] raw = result.getScanRecord().getBytes();
-        if (raw == null || raw.length < 15) return;
-
-    /* 1. 无脑打印完整广播包 ＋ MAC */
-        StringBuilder hex = new StringBuilder("收到广播  MAC=");
-        hex.append(result.getDevice().getAddress()).append("  Len=")
-           .append(raw.length).append("  Data=");
-        for (byte b : raw) {
-            hex.append(String.format("%02X ", b & 0xFF));
-        }
-        log(hex.toString());
-
-    /* 1. 定位 BTHome v2 头  0x16D2FC40 */
-        int idx = 0;
-        while (idx < raw.length - 6) {
-            if (raw[idx] == 0x16 &&
-                raw[idx + 1] == (byte) 0xD2 &&
-                raw[idx + 2] == (byte) 0xFC &&
-                raw[idx + 3] == 0x40) break;
-            idx++;
-        }
-        if (idx > raw.length - 6) return;
+    private TextView logTextView;
+    private ScrollView scrollView;
+    private Button startButton;
+    private Button stopButton;
+    private Button refreshLogButton;
     
-        /* 2. 剥离 payload（头之后所有字节） */
-        int offset = idx + 4;                 // 跳过 16 D2 FC 40
-        int payloadLen = raw.length - offset;
-        if (payloadLen < 3) return;
-    
-        /* 3. 逐字段解析（与 Python 完全一致） */
-        int i = offset;
-        float temperature = 0, humidity = 0, voltage = 0;
-        int battery = 0;
-    
-        while (i < raw.length - 1) {
-            int typeId = raw[i] & 0xFF;
-            i++;                                    // 跳过 type 字节
-    
-            switch (typeId) {
-                case 0x01:                          // 电池 %
-                    battery = raw[i] & 0xFF;
-                    i += 1;
-                    break;
-    
-                case 0x02:                          // 温度  sint16  ×0.01 ℃
-                    int tempRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
-                    temperature = tempRaw / 100.0f;
-                    i += 2;
-                    break;
-    
-                case 0x03:                          // 湿度  uint16  ×0.01 %
-                    int humRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
-                    humidity = humRaw / 100.0f;
-                    i += 2;
-                    break;
-    
-                case 0x0C:                          // 电压  uint16  ×0.001 V
-                    int voltRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
-                    voltage = voltRaw / 1000.0f;
-                    i += 2;
-                    break;
-    
-                default:                            // 未知 type，跳过 1 字节
-                    i += 1;
-                    break;
-            }
-        }
-    
-        /* 4. 打印结果（与 Python 完全一致） */
-        log("★ BTHome明文  温度=" + temperature +
-            "℃  湿度=" + humidity +
-            "%  电池=" + battery +
-            "%  电压=" + voltage + "V");
-
-        
-        /******************************
-        int idx = 0;
-        while (idx < raw.length) {
-            int len = raw[idx++] & 0xFF;
-            if (len == 0) break;
-            int type = raw[idx] & 0xFF;
-            if (type == 0x16 && len >= 13) {
-                int uuid = (raw[idx + 1] & 0xFF) | ((raw[idx + 2] & 0xFF) << 8);
-                int uuidHi = (raw[idx + 3] & 0xFF) | ((raw[idx + 4] & 0xFF) << 8);
-                int frameType = raw[idx + 5] & 0xFF;
-                log(">>> frameType = 0x" + Integer.toHexString(frameType));
-                log(">>> uuid = 0x" + Integer.toHexString(uuid));
-                log(">>> uuidHi = 0x" + Integer.toHexString(uuidHi));
-                if (uuid == 0xFC40 && uuidHi == 0x00D2) {   // 0x00D2FC40
-                    int tempRaw = (raw[idx + 7] & 0xFF) | ((raw[idx + 8] & 0xFF) << 8);
-                    int humRaw  = raw[idx + 9] & 0xFF;
-                    float temp  = tempRaw * 0.1f;
-                    log("★ 明文Beacon 温度=" + temp + "℃  湿度=" + humRaw + "%");
-                    return;
-                }
-                if (uuid == 0xFE95) {
- 
-                    if (frameType == 0x5B) {
-                        log(">>> 发现 0x5B 加密包，尝试解密…");
-                        int dataLen = raw[idx + 6] & 0xFF;
-                        decrypt0x5B(mac, raw, idx + 7, dataLen);
-                        return;
-                    }
-                    if (frameType == 0x20) {   // 明文备份
-                        int tempRaw = (raw[idx + 7] & 0xFF) | ((raw[idx + 8] & 0xFF) << 8);
-                        int humRaw  = raw[idx + 9] & 0xFF;
-                        log("★ 明文解析  温度=" + (tempRaw * 0.1f) +
-                            "℃  湿度=" + humRaw + "%");
-                        return;
-                    }
-                }
-            }
-            idx += len;
-        }
-        *************/
-    }
-    /* =================================================== */
-    /* ============ 3. 0x5B 解密实现 ============ */
-    private void decrypt0x5B(String mac, byte[] raw, int offset, int dataLen) {
-        try {
-            /* 1. 字段提取（同之前） */
-            byte[] enc  = new byte[8];   // 8 字节 密文(含 4 字节 tag)
-            System.arraycopy(raw, offset, enc, 0, 8);
-            byte[] nonce = new byte[8];
-            System.arraycopy(enc, 0, nonce, 0, 5);        // enc[0:5]
-            byte[] macBytes = macToBytes(mac);
-            System.arraycopy(macBytes, 3, nonce, 5, 3);   // MAC 后 3 字节
-            byte[] key = hexToBytes(TOKEN_HEX);
-    
-            /* 2. BouncyCastle CCM 解密 */
-            org.bouncycastle.crypto.params.KeyParameter keyParam =
-                    new org.bouncycastle.crypto.params.KeyParameter(key);
-            org.bouncycastle.crypto.modes.CCMBlockCipher ccm =
-                    new org.bouncycastle.crypto.modes.CCMBlockCipher(
-                            new org.bouncycastle.crypto.engines.AESEngine());
-            ccm.init(false,
-                    new CCMParameters(keyParam, 32, nonce, new byte[0])); // 32 bit = 4 byte tag
-    
-            byte[] cipherText = Arrays.copyOfRange(enc, 0, 5);
-            byte[] plain = new byte[5];
-            int len = ccm.processBytes(cipherText, 0, 5, plain, 0);
-            ccm.doFinal(plain, len);
-    
-            /* 3. 取值 */
-            int humidity = plain[0] & 0xFF;
-            int tempRaw  = (plain[1] & 0xFF) | ((plain[2] & 0xFF) << 8);
-            float temp   = tempRaw * 0.1f;
-            int battery  = (plain[3] & 0xFF) | ((plain[4] & 0xFF) << 8);
-            log("★ 解密成功  温度=" + temp + "℃  湿度=" + humidity +
-                "%  电池=" + battery + " mV");
-    
-        } catch (Exception e) {
-            log("解密异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-            e.printStackTrace();   // 调试用，可在 logcat 看完整栈
-        }
-    }
-    
-    /* ============ 4. 工具 ============ */
-    private byte[] macToBytes(String mac) {
-        String[] hex = mac.split(":");
-        byte[] b = new byte[6];
-        for (int i = 0; i < 6; i++) b[i] = (byte) Integer.parseInt(hex[i], 16);
-        return b;
-    }
-    
-    private byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] out = new byte[len >> 1];
-        for (int i = 0; i < len; i += 2) {
-            out[i >> 1] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
-        }
-        return out;
-    }
-
-    
-    /* ===================== 界面 ===================== */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        setContentView(root);
-
-        tvLog = new TextView(this);
-        tvLog.setMovementMethod(new ScrollingMovementMethod());
-        scroll = new ScrollView(this);
-        scroll.addView(tvLog);
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-
-        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            toast("设备不支持 BLE");
-            finish();
-            return;
+        createUI();
+        
+        Logger.i("MainActivity created");
+        
+        // 检查权限
+        checkPermissions();
+        
+        // 显示配置文件路径
+        String configPath = ConfigManager.getInstance(this).getConfigFilePath();
+        Logger.i("Config file path: " + configPath);
+    }
+    
+    private void createUI() {
+        LinearLayout mainLayout = new LinearLayout(this);
+        mainLayout.setOrientation(LinearLayout.VERTICAL);
+        mainLayout.setPadding(16, 16, 16, 16);
+        
+        // 创建按钮布局
+        LinearLayout buttonLayout = new LinearLayout(this);
+        buttonLayout.setOrientation(LinearLayout.HORIZONTAL);
+        
+        startButton = new Button(this);
+        startButton.setText("Start Service");
+        startButton.setOnClickListener(v -> startService());
+        
+        stopButton = new Button(this);
+        stopButton.setText("Stop Service");
+        stopButton.setOnClickListener(v -> stopService());
+        
+        refreshLogButton = new Button(this);
+        refreshLogButton.setText("Refresh Log");
+        refreshLogButton.setOnClickListener(v -> refreshLog());
+        
+        buttonLayout.addView(startButton);
+        buttonLayout.addView(stopButton);
+        buttonLayout.addView(refreshLogButton);
+        
+        // 创建日志显示区域
+        logTextView = new TextView(this);
+        logTextView.setTextSize(10);
+        logTextView.setPadding(8, 8, 8, 8);
+        logTextView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        
+        scrollView = new ScrollView(this);
+        scrollView.addView(logTextView);
+        
+        mainLayout.addView(buttonLayout);
+        mainLayout.addView(scrollView, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            0,
+            1.0f));
+        
+        setContentView(mainLayout);
+    }
+    
+    private void checkPermissions() {
+        if (!PermissionManager.hasAllPermissions(this)) {
+            Logger.w("Requesting permissions...");
+            PermissionManager.requestPermissions(this);
+        } else {
+            Logger.i("All permissions granted");
+            startService();
         }
-
-        /* 6.0-11 额外检查定位开关 */
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-            if (lm != null &&
-                    !lm.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
-                    !lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                toast("请打开定位开关");
-                finish();
-                return;
+        
+        // Android 11+ 需要特殊处理后台位置权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!ActivityCompat.shouldShowRequestPermissionRationale(this, 
+                    android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    Uri uri = Uri.fromParts("package", getPackageName(), null);
+                    intent.setData(uri);
+                    startActivity(intent);
+                } catch (Exception e) {
+                    Logger.e("Error opening app settings", e);
+                }
             }
         }
-
-        requestPerms();
     }
-    /* =================================================== */
-
+    
+    private void startService() {
+        try {
+            Intent serviceIntent = new Intent(this, BLEService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+            Logger.i("BLE Service started");
+        } catch (Exception e) {
+            Logger.e("Error starting service", e);
+        }
+    }
+    
+    private void stopService() {
+        try {
+            Intent serviceIntent = new Intent(this, BLEService.class);
+            stopService(serviceIntent);
+            Logger.i("BLE Service stopped");
+        } catch (Exception e) {
+            Logger.e("Error stopping service", e);
+        }
+    }
+    
+    private void refreshLog() {
+        new Thread(() -> {
+            try {
+                Process process = Runtime.getRuntime().exec("logcat -d -s BLEMQTTBridge:*");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                
+                StringBuilder log = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    log.append(line).append("\n");
+                }
+                
+                runOnUiThread(() -> {
+                    logTextView.setText(log.toString());
+                    scrollView.fullScroll(ScrollView.FOCUS_DOWN);
+                });
+                
+            } catch (Exception e) {
+                Logger.e("Error reading logcat", e);
+            }
+        }).start();
+    }
+    
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (scanner != null && scanCallback != null)
-            scanner.stopScan(scanCallback);
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (PermissionManager.isPermissionGranted(requestCode, permissions, grantResults)) {
+            Logger.i("All permissions granted");
+            startService();
+        } else {
+            Logger.e("Some permissions denied");
+        }
     }
 }

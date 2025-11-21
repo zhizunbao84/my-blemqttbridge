@@ -90,6 +90,7 @@ public class BLEService extends Service {
         targetMacs.clear();
         targetMacs.addAll(Arrays.asList(macs));
         Logger.i("Loaded " + targetMacs.size() + " target devices");
+        Logger.i("Target MAC list: " + targetMacs);
     }
     
     private void startScanning() {
@@ -148,10 +149,7 @@ public class BLEService extends Service {
         String deviceAddress = device.getAddress();
         String deviceName = device.getName();
         
-        // 检查是否是目标设备
-        if (!targetMacs.contains(deviceAddress)) {
-            return;
-        }
+
         
         byte[] scanRecord = result.getScanRecord().getBytes();
         int rssi = result.getRssi();

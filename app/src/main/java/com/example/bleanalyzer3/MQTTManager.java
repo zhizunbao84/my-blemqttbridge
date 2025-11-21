@@ -2,7 +2,7 @@ package com.example.bleanalyzer3;
 
 import android.content.Context;
 import org.eclipse.paho.client.mqttv3.*;
-
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import java.util.UUID;
 
 public class MQTTManager {

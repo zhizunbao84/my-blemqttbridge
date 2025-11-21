@@ -45,7 +45,7 @@ public class ConfigManager {
 
             /* 2. 重新解析（用户可能已手动修改） */
             if (externalConfig.exists()) {
-                parseIni(externalConfig);
+                loadFromFile(externalConfig);
                 Logger.i("Config reloaded from " + externalConfig.getAbsolutePath());
             }
             

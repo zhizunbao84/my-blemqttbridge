@@ -91,37 +91,43 @@ public class ConfigManager {
         }
         
         // 设置日志级别
-        String logLevel = config.getOrDefault("general.log_level", "DEBUG");
+        String logLevel = config.containsKey("general.log_level") ? config.get("general.log_level") : "DEBUG";
         Logger.setLogLevel(logLevel);
     }
     
     public String[] getDeviceMacs() {
-        String macs = config.getOrDefault("bluetooth.device_macs", "");
+        String macs = config.containsKey("bluetooth.device_macs") ? config.get("bluetooth.device_macs") : "";
         return macs.split(",");
     }
     
     public int getScanInterval() {
-        return Integer.parseInt(config.getOrDefault("bluetooth.scan_interval", "5000"));
+        String scaninterval = config.containsKey("bluetooth.scan_interval") ? config.get("bluetooth.scan_interval") : "5000";
+        return Integer.parseInt(scaninterval);
     }
     
     public String getMQTTBroker() {
-        return config.getOrDefault("mqtt.broker", "tcp://broker.hivemq.com:1883");
+        String mqttbroker = config.containsKey("mqtt.broker") ? config.get("mqtt.broker") : "tcp://127.0.0.1:1883";
+        return mqttbroker;
     }
     
     public String getMQTTUsername() {
-        return config.getOrDefault("mqtt.username", "");
+        String mqttusername = config.containsKey("mqtt.username") ? config.get("mqtt.username") : "";
+        return mqttusername;
     }
     
     public String getMQTTPassword() {
-        return config.getOrDefault("mqtt.password", "");
+        String mqttpass = config.containsKey("mqtt.password") ? config.get("mqtt.password") : "";
+        return mqttpass;
     }
     
     public String getMQTTClientId() {
-        return config.getOrDefault("mqtt.client_id", "BLEBridgeClient");
+        String mqttclientid = config.containsKey("mqtt.client_id") ? config.get("mqtt.client_id") : "BLEBridgeClient";
+        return mqttclientid;
     }
     
     public String getMQTTTopicPrefix() {
-        return config.getOrDefault("mqtt.topic_prefix", "ble/data");
+        String mqttopicprefix = config.containsKey("mqtt.topic_prefix") ? config.get("mqtt.topic_prefix") : "ble/data";
+        return mqttopicprefix;
     }
     
     public String getConfigFilePath() {

@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'com.example.bleanalyzer3'   // AGP 7.3+ 需要
-    compileSdk 33                         // 用你已装的 SDK 版本即可
+    compileSdk 34                         // 用你已装的 SDK 版本即可
 
     defaultConfig {
         applicationId "com.example.bleanalyzer3"
         minSdk 23                         // Android 6.0
-        targetSdk 33
+        targetSdk 34
         versionCode 1
         versionName "1.0"
     }

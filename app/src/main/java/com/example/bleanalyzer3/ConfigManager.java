@@ -119,7 +119,7 @@ public class ConfigManager {
     }
     
     public String getMQTTBroker() {
-        String mqttbroker = config.containsKey("mqtt.broker") ? config.get("mqtt.broker") : "tcp://127.0.0.1:1883";
+        String mqttbroker = config.containsKey("mqtt.broker") ? config.get("mqtt.broker") : "tcp://127.0.0.2:1883";
         return mqttbroker;
     }
     
@@ -139,7 +139,7 @@ public class ConfigManager {
     }
     
     public String getMQTTTopicPrefix() {
-        String mqttopicprefix = config.containsKey("mqtt.topic_prefix") ? config.get("mqtt.topic_prefix") : "ble/data";
+        String mqttopicprefix = config.containsKey("mqtt.topic_prefix") ? config.get("mqtt.topic_prefix") : "mi_temp";
         return mqttopicprefix;
     }
     

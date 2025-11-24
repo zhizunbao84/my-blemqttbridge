@@ -2,16 +2,12 @@ package com.example.bleanalyzer3;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
+
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.ini4j.Ini;
+
 
 public class ConfigManager {
     private static final String CONFIG_FILE = "config.ini";
@@ -25,24 +21,24 @@ public class ConfigManager {
         this.context = context;
         File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
         externalIni = new File(externalDir, CONFIG_FILE);
-        copyFromAssetsOnce(ctx);
+        copyFromAssetsOnce(context);
         loadConfig();
     }
     
     /* 获取单例（必须在主线程调用一次） */
     public static ConfigManager getInstance(Context ctx) {
-        if (INSTANCE == null) {
+        if (instance == null) {
             synchronized (ConfigManager.class) {
-                if (INSTANCE == null) INSTANCE = new ConfigManager(ctx);
+                if (instance == null) instance = new ConfigManager(ctx);
             }
         }
-        return INSTANCE;
+        return instance;
     }
     
     public void loadConfig() {
         try {
             loadFromFile();
-            Logger.i("Config reloaded from " + externalConfig.getAbsolutePath());
+            Logger.i("Config reloaded from " + externalIni.getAbsolutePath());
             
             Logger.i("Config loaded successfully");
             Logger.d("Device MACs: " + getDeviceMacs());

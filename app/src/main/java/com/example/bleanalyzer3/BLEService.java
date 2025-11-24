@@ -156,31 +156,97 @@ public class BLEService extends Service {
         }
         
         String deviceAddress = device.getAddress();
-        String deviceName = device.getName();
-        
-
-        
+        String deviceName = device.getName();        
         byte[] scanRecord = result.getScanRecord().getBytes();
         int rssi = result.getRssi();
         
         Logger.d("Found target device: " + deviceAddress + " (Name: " + deviceName + "), RSSI: " + rssi);
-        
+        byte[] raw = result.getScanRecord().getBytes();
+        if (raw == null || raw.length < 15) return;
+
+    /* 1. 无脑打印完整广播包 ＋ MAC */
+        StringBuilder hex = new StringBuilder("收到广播  MAC=");
+        hex.append(deviceAddress).append("  Len=")
+           .append(raw.length).append("  Data=");
+        for (byte b : raw) {
+            hex.append(String.format("%02X ", b & 0xFF));
+        }
+        Logger.d(hex.toString());
+
+        /* 1. 定位 BTHome v2 头  0x16D2FC40 */
+        int idx = 0;
+        while (idx < raw.length - 6) {
+            if (raw[idx] == 0x16 &&
+                raw[idx + 1] == (byte) 0xD2 &&
+                raw[idx + 2] == (byte) 0xFC &&
+                raw[idx + 3] == 0x40) break;
+            idx++;
+        }
+        if (idx > raw.length - 6) return;
+    
+        /* 2. 剥离 payload（头之后所有字节） */
+        int offset = idx + 4;                 // 跳过 16 D2 FC 40
+        int payloadLen = raw.length - offset;
+        if (payloadLen < 3) return;
+    
+        /* 3. 逐字段解析（与 Python 完全一致） */
+        int i = offset;
+        float temperature = 0, humidity = 0, voltage = 0;
+        int battery = 0;
+    
+        while (i < raw.length - 1) {
+            int typeId = raw[i] & 0xFF;
+            i++;                                    // 跳过 type 字节
+    
+            switch (typeId) {
+                case 0x01:                          // 电池 %
+                    battery = raw[i] & 0xFF;
+                    i += 1;
+                    break;
+    
+                case 0x02:                          // 温度  sint16  ×0.01 ℃
+                    int tempRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
+                    temperature = tempRaw / 100.0f;
+                    i += 2;
+                    break;
+    
+                case 0x03:                          // 湿度  uint16  ×0.01 %
+                    int humRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
+                    humidity = humRaw / 100.0f;
+                    i += 2;
+                    break;
+    
+                case 0x0C:                          // 电压  uint16  ×0.001 V
+                    int voltRaw = (raw[i] & 0xFF) | ((raw[i + 1] & 0xFF) << 8);
+                    voltage = voltRaw / 1000.0f;
+                    i += 2;
+                    break;
+    
+                default:                            // 未知 type，跳过 1 字节
+                    i += 1;
+                    break;
+            }
+        }
+    
+        /* 4. 打印结果（与 Python 完全一致） */
+        Logger.d("★ BTHome明文  温度=" + temperature +
+            "℃  湿度=" + humidity +
+            "%  电池=" + battery +
+            "%  电压=" + voltage + "V");
         // 将数据发送到MQTT
         sendToMQTT(deviceAddress, deviceName, scanRecord, rssi);
     }
     
-    private void sendToMQTT(String macAddress, String deviceName, byte[] scanRecord, int rssi) {
+    private void sendToMQTT(String macAddress, float temperature, float humidity, int battery) {
         try {
-            String topic = configManager.getMQTTTopicPrefix() + "/" + macAddress.replace(":", "");
+            String topic = configManager.getMQTTTopicPrefix() + "/" + macAddress.replace(":", "")+"/state";
             
             // 构建JSON格式的消息
             String message = String.format(
-                "{\"mac\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"data\":\"%s\",\"timestamp\":%d}",
-                macAddress,
-                deviceName != null ? deviceName : "",
-                rssi,
-                bytesToHex(scanRecord),
-                System.currentTimeMillis()
+                "{\"temperature\":\"%.1f\",\"humidity\":\"%.1f\",\"battery\":%d}",
+                temperature,
+                humidity,
+                battery
             );
             
             mqttManager.publish(topic, message);

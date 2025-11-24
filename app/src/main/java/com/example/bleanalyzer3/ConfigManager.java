@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import org.ini4j.Ini;
 
 public class ConfigManager {
     private static final String CONFIG_FILE = "config.ini";
@@ -18,36 +19,30 @@ public class ConfigManager {
     private static ConfigManager instance;
     private Map<String, String> config = new HashMap<>();
     private Context context;
+    private final File externalIni;
     
     private ConfigManager(Context context) {
         this.context = context;
+        File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
+        externalIni = new File(externalDir, CONFIG_FILE);
+        copyFromAssetsOnce(ctx);
         loadConfig();
     }
     
-    public static synchronized ConfigManager getInstance(Context context) {
-        if (instance == null) {
-            instance = new ConfigManager(context.getApplicationContext());
+    /* 获取单例（必须在主线程调用一次） */
+    public static ConfigManager getInstance(Context ctx) {
+        if (INSTANCE == null) {
+            synchronized (ConfigManager.class) {
+                if (INSTANCE == null) INSTANCE = new ConfigManager(ctx);
+            }
         }
-        return instance;
+        return INSTANCE;
     }
     
     public void loadConfig() {
         try {
-            // 首先尝试从外部存储加载配置文件
-            File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
-            File externalConfig = new File(externalDir, CONFIG_FILE);
-            
-            /* 1. 目录/文件不存在：首次安装，从 assets 拷贝 */
-            if (!externalConfig.exists()) {
-                Logger.i("External config not found, copying from assets");
-                copyConfigFromAssets();
-            }
-
-            /* 2. 重新解析（用户可能已手动修改） */
-            if (externalConfig.exists()) {
-                loadFromFile(externalConfig);
-                Logger.i("Config reloaded from " + externalConfig.getAbsolutePath());
-            }
+            loadFromFile();
+            Logger.i("Config reloaded from " + externalConfig.getAbsolutePath());
             
             Logger.i("Config loaded successfully");
             Logger.d("Device MACs: " + getDeviceMacs());
@@ -58,6 +53,21 @@ public class ConfigManager {
             Logger.setLogLevel(level);
         } catch (Exception e) {
             Logger.e("Error loading config", e);
+        }
+    }
+
+    /* 首次安装：把 assets/config.ini 拷到外部私有目录 */
+    private void copyFromAssetsOnce(Context ctx) {
+        if (!externalIni.exists()) {
+            try (InputStream in = ctx.getAssets().open("config.ini");
+                 OutputStream out = new FileOutputStream(externalIni)) {
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+                Logger.i("Config file copied to: " + externalIni.getAbsolutePath());
+            } catch (IOException e) {
+                throw new RuntimeException("首次拷贝 ini 失败", e);
+            }
         }
     }
     
@@ -82,9 +92,9 @@ public class ConfigManager {
         Logger.i("Config file copied to: " + externalConfig.getAbsolutePath());
     }
     
-    private void loadFromFile(File file) throws IOException {
+    private void loadFromFile() throws IOException {
         Properties props = new Properties();
-        try (FileReader reader = new FileReader(file)) {
+        try (FileReader reader = new FileReader(externalIni)) {
             props.load(reader);
         }
         

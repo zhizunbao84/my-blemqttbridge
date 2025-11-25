@@ -16,10 +16,14 @@ public class ConfigManager {
     private Map<String, String> config = new HashMap<>();
     private Context context;
     private final File externalIni;
+    private final File externalDir;
     
     private ConfigManager(Context context) {
         this.context = context;
-        File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
+        externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
+        if (!externalDir.exists()) {          
+            externalDir.mkdirs(); 
+        }
         externalIni = new File(externalDir, CONFIG_FILE);
         copyFromAssetsOnce(context);
         loadConfig();

@@ -156,6 +156,10 @@ public class BLEService extends Service {
         }
         
         String deviceAddress = device.getAddress();
+        // 检查是否是目标设备
+        if (!targetMacs.contains(deviceAddress)) {
+            return;
+        }
         String deviceName = device.getName();        
         byte[] scanRecord = result.getScanRecord().getBytes();
         int rssi = result.getRssi();

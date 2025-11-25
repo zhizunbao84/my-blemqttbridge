@@ -237,8 +237,11 @@ public class BLEService extends Service {
             "℃  湿度=" + humidity +
             "%  电池=" + battery +
             "%  电压=" + voltage + "V");
-        // 将数据发送到MQTT
-        sendToMQTT(deviceAddress, temperature, humidity, battery);
+        if (temperature > 1e-6f) {
+            // 将数据发送到MQTT
+            sendToMQTT(deviceAddress, temperature, humidity, battery);           
+        }
+
     }
     
     private void sendToMQTT(String macAddress, float temperature, float humidity, int battery) {

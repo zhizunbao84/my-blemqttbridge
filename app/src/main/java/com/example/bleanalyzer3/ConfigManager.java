@@ -114,43 +114,41 @@ public class ConfigManager {
     }
     
     public String[] getDeviceMacs() {
-        String macs = config.containsKey("bluetooth.device_macs") ? config.get("bluetooth.device_macs") : "";
+        String macs = config.containsKey("device_macs") ? config.get("device_macs") : "";
         return macs.split(",");
     }
     
     public int getScanInterval() {
-        String scaninterval = config.containsKey("bluetooth.scan_interval") ? config.get("bluetooth.scan_interval") : "5000";
+        String scaninterval = config.containsKey("scan_interval") ? config.get("scan_interval") : "5000";
         return Integer.parseInt(scaninterval);
     }
     
     public String getMQTTBroker() {
-        String mqttbroker = config.containsKey("mqtt.broker") ? config.get("mqtt.broker") : "tcp://127.0.0.2:1883";
+        String mqttbroker = config.containsKey("broker") ? config.get("broker") : "tcp://127.0.0.2:1883";
         return mqttbroker;
     }
     
     public String getMQTTUsername() {
-        String mqttusername = config.containsKey("mqtt.username") ? config.get("mqtt.username") : "";
+        String mqttusername = config.containsKey("username") ? config.get("username") : "";
         return mqttusername;
     }
     
     public String getMQTTPassword() {
-        String mqttpass = config.containsKey("mqtt.password") ? config.get("mqtt.password") : "";
+        String mqttpass = config.containsKey("password") ? config.get("password") : "";
         return mqttpass;
     }
     
     public String getMQTTClientId() {
-        String mqttclientid = config.containsKey("mqtt.client_id") ? config.get("mqtt.client_id") : "BLEBridgeClient";
+        String mqttclientid = config.containsKey("client_id") ? config.get("client_id") : "BLEBridgeClient";
         return mqttclientid;
     }
     
     public String getMQTTTopicPrefix() {
-        String mqttopicprefix = config.containsKey("mqtt.topic_prefix") ? config.get("mqtt.topic_prefix") : "mi_temp";
+        String mqttopicprefix = config.containsKey("topic_prefix") ? config.get("topic_prefix") : "mi_temp";
         return mqttopicprefix;
     }
     
     public String getConfigFilePath() {
-        File externalDir = new File(context.getExternalFilesDir(null), EXTERNAL_CONFIG_DIR);
-        File externalConfig = new File(externalDir, CONFIG_FILE);
-        return externalConfig.getAbsolutePath();
+        return externalIni.getAbsolutePath();
     }
 }

@@ -93,19 +93,24 @@ public class ConfigManager {
     }
     
     private void loadFromFile() throws IOException {
-        Properties props = new Properties();
-        try (FileReader reader = new FileReader(externalIni)) {
-            props.load(reader);
-        }
-        
         config.clear();
-        for (String key : props.stringPropertyNames()) {
-            config.put(key, props.getProperty(key));
+        try (BufferedReader br = new BufferedReader(new FileReader(externalIni))) {
+            String line;
+            int no = 0;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                no++;
+                if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) continue;
+                int idx = line.indexOf('=');
+                if (idx > 0) {
+                    String key = line.substring(0, idx).trim();
+                    String val = line.substring(idx + 1).trim();
+                    config.put(key, val);
+                    Logger.d("ini [" + no + "]  " + key + " = " + val);   // 详细 dump
+                }
+            }
         }
-        
-        // 设置日志级别
-        String logLevel = config.containsKey("general.log_level") ? config.get("general.log_level") : "DEBUG";
-        Logger.setLogLevel(logLevel);
+
     }
     
     public String[] getDeviceMacs() {
